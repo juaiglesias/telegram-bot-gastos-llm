@@ -1,0 +1,18 @@
+[Unit]
+Description=Telegram Expense Tracker Bot
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/telegram-bot-gastos-llm
+Environment="PATH=/home/pi/telegram-bot-gastos-llm/.venv/bin"
+ExecStart=/home/pi/telegram-bot-gastos-llm/.venv/bin/python run.py
+Restart=always
+RestartSec=10
+
+StandardOutput=append:/var/log/telegram-bot-gastos-llm/stdout.log
+StandardError=append:/var/log/telegram-bot-gastos-llm/stderr.log
+
+[Install]
+WantedBy=multi-user.target

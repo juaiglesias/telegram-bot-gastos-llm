@@ -1,0 +1,122 @@
+"""Cliente para interactuar con Google Sheets."""
+import logging
+import time
+from functools import wraps
+import gspread
+from google.oauth2.service_account import Credentials
+from src.utils.exceptions import GoogleSheetsError
+
+
+logger = logging.getLogger('telegram_bot')
+
+
+def rate_limit(max_calls: int, period: int):
+    """
+    Decorador para limitar la cantidad de llamadas por período.
+
+    Args:
+        max_calls: Máximo número de llamadas permitidas
+        period: Período en segundos
+    """
+    calls = []
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            now = time.time()
+            # Limpiar llamadas antiguas
+            calls[:] = [call_time for call_time in calls if now - call_time < period]
+
+            if len(calls) >= max_calls:
+                sleep_time = period - (now - calls[0])
+                logger.warning(f"Rate limit alcanzado, esperando {sleep_time:.2f} segundos")
+                time.sleep(sleep_time)
+                calls[:] = []
+
+            calls.append(now)
+            return func(*args, **kwargs)
+
+        return wrapper
+    return decorator
+
+
+class SheetsClient:
+    """Cliente para escribir gastos en Google Sheets."""
+
+    def __init__(self, credentials_path: str, spreadsheet_id: str, sheet_name: str):
+        """
+        Inicializa el cliente de Google Sheets.
+
+        Args:
+            credentials_path: Ruta al archivo JSON de credenciales
+            spreadsheet_id: ID del spreadsheet de Google Sheets
+            sheet_name: Nombre de la pestaña donde escribir
+
+        Raises:
+            GoogleSheetsError: Si no se puede autenticar o acceder al spreadsheet
+        """
+        self.spreadsheet_id = spreadsheet_id
+        self.sheet_name = sheet_name
+
+        try:
+            logger.info("Autenticando con Google Sheets...")
+
+            # Definir los scopes necesarios
+            scopes = [
+                'https://www.googleapis.com/auth/spreadsheets',
+                'https://www.googleapis.com/auth/drive'
+            ]
+
+            # Cargar credenciales
+            credentials = Credentials.from_service_account_file(
+                credentials_path,
+                scopes=scopes
+            )
+
+            # Crear cliente de gspread
+            self.client = gspread.authorize(credentials)
+
+            # Abrir el spreadsheet
+            self.spreadsheet = self.client.open_by_key(spreadsheet_id)
+
+            # Verificar que la pestaña existe
+            try:
+                self.worksheet = self.spreadsheet.worksheet(sheet_name)
+                logger.info(f"Conectado a Google Sheets: '{sheet_name}'")
+            except gspread.exceptions.WorksheetNotFound:
+                raise GoogleSheetsError(f"Pestaña '{sheet_name}' no encontrada en el spreadsheet")
+
+        except FileNotFoundError:
+            raise GoogleSheetsError(f"Archivo de credenciales no encontrado: {credentials_path}")
+        except Exception as e:
+            logger.error(f"Error al conectar con Google Sheets: {e}")
+            raise GoogleSheetsError(f"Error de autenticación con Google Sheets: {e}")
+
+    @rate_limit(max_calls=50, period=60)
+    def append_expense(self, fecha: str, descripcion: str, categoria: str, monto: float) -> None:
+        """
+        Agrega una fila con el gasto al final de la hoja.
+
+        Rate limiting: Máximo 50 llamadas por minuto (Google limita a 60/min).
+
+        Args:
+            fecha: Fecha en formato YYYY-MM-DD
+            descripcion: Descripción del gasto (mensaje original del usuario)
+            categoria: Categoría del gasto
+            monto: Monto del gasto
+
+        Raises:
+            GoogleSheetsError: Si hay un error al escribir en Sheets
+        """
+        try:
+            logger.info(f"Registrando gasto: {categoria} - ${monto} - {fecha}")
+
+            # Agregar fila al final de la hoja
+            row = [fecha, descripcion, categoria, monto]
+            self.worksheet.append_row(row, value_input_option='USER_ENTERED')
+
+            logger.info("Gasto registrado exitosamente en Google Sheets")
+
+        except Exception as e:
+            logger.error(f"Error al escribir en Google Sheets: {e}")
+            raise GoogleSheetsError(f"Error al registrar gasto en Sheets: {e}")
