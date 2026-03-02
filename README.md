@@ -2,14 +2,67 @@
 
 Bot de Telegram que procesa mensajes de texto y audio en lenguaje natural sobre gastos y los registra automáticamente en Google Sheets usando un LLM local (Ollama).
 
+## 🎯 Objetivo
+
+Permitir el registro automático de gastos personales (propios y de pareja) a partir de mensajes de texto o voz enviados por Telegram, cuando no se tiene acceso simple o inmediato a la planilla utilizada para llevar el control financiero.
+
+El foco es reducir fricción: registrar el gasto en el momento en que ocurre, usando lenguaje natural.
+
 ## 🌟 Características
 
 - 🤖 **Procesa lenguaje natural**: Envía mensajes como "Compré pan por $500 ayer" y el bot entiende
-- 🎙️ **Soporte de audio**: Envía notas de voz o audios; el bot los transcribe automáticamente con Whisper (OpenAI)
+- 🎙️ **Soporte de audio**: Envía notas de voz o audios; el bot los transcribe automáticamente con Whisper (modelo open-source)
 - 📊 **Registro automático**: Guarda directamente en Google Sheets con descripción generada por el LLM
 - 🧠 **LLM local**: Usa Qwen3:1.7B corriendo en Ollama (privado, sin costos de API)
 - ⚙️ **Configurable**: Todo parametrizable vía variables de entorno
 - 🍓 **Optimizado para Raspberry Pi**: Bajo consumo de recursos
+
+
+## 🧠 ¿Por qué usar un LLM?
+
+El sistema utiliza un modelo liviano ejecutado localmente (via Ollama) para interpretar mensajes en lenguaje natural.
+
+Ventajas frente a soluciones tradicionales (regex, comandos estructurados o botones):
+
+- Permite entrada libre: "pagué 23 mil en el súper", "compré nafta 45k", "almuerzo con Juan 12.500"
+- Categorización automática según un set predefinido de categorías
+- Soporte natural para variaciones de formato, moneda y redacción
+- Posibilidad de extender a voz sin modificar el modelo de interacción
+
+El LLM actúa únicamente como capa de interpretación. La lógica de negocio y la persistencia siguen siendo determinísticas.
+
+### 🔒 ¿Por qué un LLM local?
+
+Se optó por un modelo liviano ejecutado localmente en lugar de APIs externas por:
+
+- Evitar costos variables por uso
+- Independencia de servicios externos
+
+El modelo utilizado es intencionalmente liviano para mantener tiempos de respuesta razonables y bajo consumo de recursos ya que fue diseñado para ejecutarse en una Raspberry Pi 5.
+
+### 🏷️ Categorización automática
+
+Uno de los principales beneficios del uso de LLM es la asignación automática de categorías de gasto.
+
+El modelo recibe:
+
+- El mensaje original
+- El listado explícito de categorías válidas
+
+Y debe devolver un JSON estructurado con:
+
+- Monto
+- Descripción
+- Categoría (forzada a una del listado)
+- Fecha (si está implícita)
+
+Esto permite mantener consistencia en la planilla sin exigirle al usuario recordar comandos o categorías exactas.
+
+## ⚠️ Limitaciones
+
+- La precisión depende del modelo y del prompt.
+- No maneja múltiples gastos en un mismo mensaje.
+- No existe interfaz de corrección automática ante errores del modelo.
 
 ## 🏗️ Arquitectura
 
