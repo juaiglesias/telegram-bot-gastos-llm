@@ -11,6 +11,94 @@ Bot de Telegram que procesa mensajes de texto y audio en lenguaje natural sobre 
 - ⚙️ **Configurable**: Todo parametrizable vía variables de entorno
 - 🍓 **Optimizado para Raspberry Pi**: Bajo consumo de recursos
 
+## 🏗️ Arquitectura
+
+### Diagrama de Contenedores (C2)
+
+Vista de alto nivel de los componentes del sistema y cómo se comunican entre sí:
+
+```mermaid
+C4Container
+    title Bot de Gastos — Diagrama de Contenedores
+
+    Person(user, "Usuario", "Envía gastos por texto o nota de voz desde Telegram")
+
+    System_Ext(telegram, "Telegram", "Plataforma de mensajería. Entrega mensajes al bot y devuelve respuestas al usuario.")
+
+    System_Boundary(system, "telegram-bot-gastos-llm") {
+        Container(bot, "Bot de Gastos", "Python · python-telegram-bot", "Orquesta el flujo completo: recibe mensajes, coordina la transcripción, el análisis LLM y el guardado.")
+        Container(whisper, "Whisper", "openai-whisper · modelo small (local)", "Transcribe notas de voz y audios a texto en español.")
+        Container(ollama, "Ollama · Qwen3:1.7b", "LLM local", "Extrae monto, categoría, fecha y descripción del mensaje en lenguaje natural y devuelve un JSON estructurado.")
+    }
+
+    System_Ext(sheets, "Google Sheets", "Almacena el registro de gastos en una hoja de cálculo.")
+
+    Rel(user, telegram, "Envía texto o nota de voz")
+    Rel(telegram, bot, "Entrega Update con el mensaje")
+    Rel(bot, whisper, "Envía audio para transcribir")
+    Rel(whisper, bot, "Devuelve texto transcrito")
+    Rel(bot, ollama, "Envía prompt con el mensaje", "HTTP REST")
+    Rel(ollama, bot, "Devuelve JSON con datos del gasto")
+    Rel(bot, sheets, "Registra el gasto", "Google Sheets API")
+    Rel(bot, telegram, "Envía confirmación al usuario")
+    Rel(telegram, user, "Muestra la confirmación")
+```
+
+### Diagrama de Secuencia
+
+Flujo detallado de inicialización y ciclo de vida de un mensaje:
+
+```mermaid
+sequenceDiagram
+    actor User as 👤 Usuario
+    participant TG as Telegram API
+    participant Main as main.py
+    participant Handler as telegram_handler.py
+    participant Whisper as openai-whisper
+    participant Prompt as prompt_builder.py
+    participant Ollama as ollama_client.py
+    participant OL as Ollama (Qwen3:1.7b)
+    participant Val as validators.py
+    participant Sheets as sheets_client.py
+    participant GS as Google Sheets
+
+    Note over Main: Arranque
+    Main->>Main: Carga Config (.env)
+    Main->>Ollama: Inicializa OllamaClient
+    Main->>Sheets: Inicializa SheetsClient
+    Main->>Whisper: whisper.load_model("small")
+    Main->>TG: Registra handlers · start polling
+
+    Note over User,GS: Ciclo de vida de un mensaje
+    User->>TG: Texto o nota de voz
+    TG->>Handler: handle_message(Update)
+
+    alt Audio / Nota de voz
+        Handler->>Whisper: transcribe(audio, language="es")
+        Whisper-->>Handler: texto transcrito
+    end
+
+    Handler->>Prompt: build_prompt(texto, categorías)
+    Prompt-->>Handler: prompt con fecha actual
+    Handler->>Ollama: generate(prompt)
+    Ollama->>OL: HTTP POST /api/generate
+    OL-->>Ollama: JSON con monto, categoría, fecha, descripción
+    Ollama-->>Handler: expense_data
+
+    Handler->>Val: validate_expense_data(expense_data, categorías)
+
+    alt Datos válidos
+        Handler->>Sheets: append_expense(fecha, descripcion, categoria, monto)
+        Sheets->>GS: Sheets API
+        GS-->>Sheets: OK
+        Handler->>TG: ✅ Confirmación con resumen
+    else Datos inválidos o error
+        Handler->>TG: ❌ Mensaje de error con sugerencia
+    end
+
+    TG-->>User: Respuesta final
+```
+
 ## 📋 Requisitos Previos
 
 1. **Python 3.9+**
