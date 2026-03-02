@@ -50,6 +50,6 @@ def setup_logger(config) -> logging.Logger:
         file_handler.setFormatter(formatter)
         logger.addHandler(file_handler)
     except PermissionError:
-        logger.warning("No se pudo crear archivo de log en /var/log/telegram-bot-gastos-llm/, solo se usará consola")
+        logger.warning("No se pudo crear archivo de log en {log_dir}, solo se usará consola")
 
     return logger

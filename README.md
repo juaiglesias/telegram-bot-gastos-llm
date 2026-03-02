@@ -1,11 +1,12 @@
 # Bot de Telegram para Registro de Gastos
 
-Bot de Telegram que procesa mensajes en lenguaje natural sobre gastos y los registra automáticamente en Google Sheets usando un LLM local (Ollama).
+Bot de Telegram que procesa mensajes de texto y audio en lenguaje natural sobre gastos y los registra automáticamente en Google Sheets usando un LLM local (Ollama).
 
 ## 🌟 Características
 
 - 🤖 **Procesa lenguaje natural**: Envía mensajes como "Compré pan por $500 ayer" y el bot entiende
-- 📊 **Registro automático**: Guarda directamente en Google Sheets
+- 🎙️ **Soporte de audio**: Envía notas de voz o audios; el bot los transcribe automáticamente con Whisper (OpenAI)
+- 📊 **Registro automático**: Guarda directamente en Google Sheets con descripción generada por el LLM
 - 🧠 **LLM local**: Usa Qwen3:1.7B corriendo en Ollama (privado, sin costos de API)
 - ⚙️ **Configurable**: Todo parametrizable vía variables de entorno
 - 🍓 **Optimizado para Raspberry Pi**: Bajo consumo de recursos
@@ -16,7 +17,8 @@ Bot de Telegram que procesa mensajes en lenguaje natural sobre gastos y los regi
 2. **Ollama** instalado con modelo `qwen3:1.7b`
 3. **Google Cloud** cuenta con Sheets API habilitada
 4. **Bot de Telegram** creado via @BotFather
-5. **uv** package manager (opcional pero recomendado)
+5. **ffmpeg** instalado en el sistema (requerido por Whisper para procesar audio)
+6. **uv** package manager (opcional pero recomendado)
 
 ## 🚀 Instalación
 
@@ -127,6 +129,10 @@ EXPENSE_CATEGORIES=Supermercado,Salidas,Juntadas,Compras
 
 # Logging
 LOG_LEVEL=INFO
+
+# Directorio de logs (default: logs/ relativo al directorio de ejecución)
+# En producción: /var/log/telegram-bot-gastos-llm
+LOG_DIR=logs
 ```
 
 ## 🎯 Uso
@@ -145,7 +151,8 @@ python run.py
 
 - `/start` - Iniciar bot y ver mensaje de bienvenida
 - `/help` - Ver categorías disponibles e instrucciones
-- **Mensaje de texto** - Registrar un gasto
+- **Mensaje de texto** - Registrar un gasto escribiendo
+- **Nota de voz / Audio** - Registrar un gasto por voz (Whisper transcribe automáticamente)
 
 ### Ejemplos de Mensajes
 
@@ -157,10 +164,13 @@ Super hoy 2500
 Juntada el lunes pasado, 1800
 ```
 
+También podés enviar una nota de voz diciendo lo mismo y el bot la transcribirá antes de procesarla.
+
 El bot entiende:
 - ✅ Montos en diferentes formatos
 - ✅ Referencias temporales (ayer, anteayer, hoy, etc.)
 - ✅ Diferentes formas de expresar gastos
+- ✅ Mensajes de texto y notas de voz / audios
 
 ## 🐳 Deployment en Raspberry Pi
 
@@ -219,7 +229,7 @@ sudo systemctl disable telegram-bot-gastos-llm
 
 2. Verifica logs del bot:
    ```bash
-   sudo journalctl -u telegram-bot -f
+   sudo journalctl -u telegram-bot-gastos-llm -f
    ```
 
 3. Verifica que el token de Telegram es correcto
@@ -246,6 +256,24 @@ sudo systemctl disable telegram-bot-gastos-llm
 ### Categoría no reconocida
 
 El bot valida que las categorías sean las configuradas en `EXPENSE_CATEGORIES`. Si el LLM devuelve una categoría no válida, el bot lo rechazará. Asegúrate de que tus categorías estén bien escritas en `.env`.
+
+### Error al procesar audio / nota de voz
+
+1. Verifica que `ffmpeg` está instalado:
+   ```bash
+   ffmpeg -version
+   ```
+   Si no está, instalarlo:
+   ```bash
+   sudo apt install ffmpeg
+   ```
+
+2. El modelo `small` de Whisper se descarga automáticamente en el primer inicio (~460 MB). Asegúrate de tener conexión a internet y espacio en disco.
+
+3. En Raspberry Pi, la transcripción puede tardar varios segundos dependiendo de la longitud del audio. Si es muy lento, considera usar el modelo `tiny` modificando el código en `src/main.py`:
+   ```python
+   model_transcribe = whisper.load_model("tiny")
+   ```
 
 ## 📁 Estructura del Proyecto
 
