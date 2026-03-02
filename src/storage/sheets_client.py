@@ -7,7 +7,7 @@ from google.oauth2.service_account import Credentials
 from src.utils.exceptions import GoogleSheetsError
 
 
-logger = logging.getLogger('telegram_bot')
+logger = logging.getLogger('telegram-bot-gastos-llm')
 
 
 def rate_limit(max_calls: int, period: int):

@@ -27,6 +27,7 @@ class Config:
         self.expense_categories = [cat.strip() for cat in categories_str.split(',')]
 
         self.log_level = os.getenv('LOG_LEVEL', 'INFO')
+        self.log_dir = os.getenv('LOG_DIR', 'logs')
 
     def _get_required_env(self, key: str) -> str:
         """

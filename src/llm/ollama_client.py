@@ -6,7 +6,7 @@ import ollama
 from src.utils.exceptions import OllamaConnectionError, OllamaInvalidJSONError
 
 
-logger = logging.getLogger('telegram_bot')
+logger = logging.getLogger('telegram-bot-gastos-llm')
 
 
 class OllamaClient:

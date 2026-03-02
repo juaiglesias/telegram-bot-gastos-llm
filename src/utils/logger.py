@@ -37,7 +37,7 @@ def setup_logger(config) -> logging.Logger:
 
     # Handler para archivo con rotación (10MB, 5 backups)
     try:
-        log_dir = Path('/var/log/telegram-bot-gastos-llm')
+        log_dir = Path(config.log_dir)
         log_dir.mkdir(parents=True, exist_ok=True)
         log_file = log_dir / 'bot.log'
 
