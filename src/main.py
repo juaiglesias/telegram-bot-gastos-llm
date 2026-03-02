@@ -1,14 +1,16 @@
 """Entry point del bot de Telegram."""
+
 import logging
 import signal
 import sys
+import whisper
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from src.config import Config
 from src.utils.logger import setup_logger
 from src.llm.ollama_client import OllamaClient
 from src.storage.sheets_client import SheetsClient
-from src.bot.telegram_handler import start_command, help_command, handle_expense_message
+from src.bot.telegram_handler import start_command, help_command, handle_message
 
 
 logger = None
@@ -32,16 +34,21 @@ def main():
         # Crear clientes
         logger.info(f"Inicializando cliente Ollama (modelo: {config.ollama_model})...")
         ollama_client = OllamaClient(
-            model=config.ollama_model,
-            timeout=config.ollama_timeout
+            model=config.ollama_model, timeout=config.ollama_timeout
         )
 
-        logger.info(f"Inicializando cliente Google Sheets (spreadsheet: {config.spreadsheet_id})...")
+        logger.info(
+            f"Inicializando cliente Google Sheets (spreadsheet: {config.spreadsheet_id})..."
+        )
         sheets_client = SheetsClient(
             credentials_path=config.google_credentials_path,
             spreadsheet_id=config.spreadsheet_id,
-            sheet_name=config.sheet_name
+            sheet_name=config.sheet_name,
         )
+
+        logger.info ("Configurando modelo de whisper para trascripción de audio...")
+        model_transcribe = whisper.load_model("small")
+        
 
         logger.info("Configurando bot de Telegram...")
 
@@ -49,15 +56,16 @@ def main():
         application = Application.builder().token(config.telegram_bot_token).build()
 
         # Almacenar clientes y configuración en bot_data para acceso en handlers
-        application.bot_data['ollama_client'] = ollama_client
-        application.bot_data['sheets_client'] = sheets_client
-        application.bot_data['categories'] = config.expense_categories
+        application.bot_data["ollama_client"] = ollama_client
+        application.bot_data["sheets_client"] = sheets_client
+        application.bot_data["whisper_model"] = model_transcribe
+        application.bot_data["categories"] = config.expense_categories
 
         # Agregar handlers
         application.add_handler(CommandHandler("start", start_command))
         application.add_handler(CommandHandler("help", help_command))
         application.add_handler(
-            MessageHandler(filters.TEXT & ~filters.COMMAND, handle_expense_message)
+            MessageHandler((filters.TEXT | filters.VOICE | filters.AUDIO) & ~filters.COMMAND, handle_message)
         )
 
         # Configurar manejo de señales para shutdown graceful
@@ -74,10 +82,13 @@ def main():
         logger.info("Presiona Ctrl+C para detener el bot")
 
         application.run_polling(
-            poll_interval=30.0,           # Consultar cada segundo
-            timeout=30,                  # Timeout de conexión
-            drop_pending_updates=True,   # Ignorar mensajes antiguos al iniciar
-            allowed_updates=Update.ALL_TYPES
+            poll_interval=30.0,
+            timeout=30,
+            drop_pending_updates=True,
+            allowed_updates=Update.ALL_TYPES,
+            bootstrap_retries=-1,  # Reintentar infinitamente en errores de red
+            read_timeout=60,
+            connect_timeout=30,
         )
 
     except ValueError as e:

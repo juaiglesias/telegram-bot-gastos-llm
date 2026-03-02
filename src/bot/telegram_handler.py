@@ -1,5 +1,6 @@
 """Handlers del bot de Telegram."""
 import logging
+import os
 from telegram import Update
 from telegram.ext import ContextTypes
 from src.llm.prompt_builder import build_prompt
@@ -14,7 +15,7 @@ from src.utils.exceptions import (
 )
 
 
-logger = logging.getLogger('telegram_bot')
+logger = logging.getLogger('telegram-bot-gastos-llm')
 
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -75,9 +76,49 @@ Los gastos se registran automáticamente en tu planilla de Google Sheets."""
     logger.info(f"Comando /help recibido de usuario {update.effective_user.id}")
 
 
-async def handle_expense_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
-    Handler principal para mensajes de texto con gastos.
+    Handler unificado de mensaje, en caso de ser texto realiza validaciones, y en caso de ser un audio intenta primero transcribirlo utilizando
+    whisper de OpenAI (https://openai.com/index/whisper/)
+    """
+    message = update.message
+    user_id = update.effective_user.id
+
+    logger.info(f"Mensaje recibido del usuario {user_id}")
+
+
+    # 1. ¿Es un audio o nota de voz?
+    if message.voice or message.audio:
+        # Obtener el archivo de mayor calidad
+        audio_file = await (message.voice or message.audio).get_file()
+
+        # Descarga temporal
+        file_path = f"temp_audio_{user_id}.ogg"
+        await audio_file.download_to_drive(file_path)
+
+        whisper_model = context.bot_data['whisper_model']
+
+        try:
+            # 2· Transcribir con whisper
+            result = whisper_model.transcribe(file_path, language="es", fp16=False)
+            user_message = result["text"]
+            logger.info(f"Audio transcrito: {user_message}")
+        finally:
+            # Limpiar archivo temporal
+            if os.path.exists(file_path):
+                os.remove(file_path)
+    elif message.text:
+            user_message = message.text
+    else:
+        logger.warning("Formato del mensaje del usuario {user_id} no soportado")
+        return
+
+    await handle_text_message(user_message, update, context)
+
+
+async def handle_text_message(user_message, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Handler para mensajes de texto con gastos.
 
     Este es el flujo completo:
     1. Construir prompt con fecha actual
@@ -87,13 +128,13 @@ async def handle_expense_message(update: Update, context: ContextTypes.DEFAULT_T
     5. Confirmar al usuario
 
     Args:
+        user_message: String mensaje del usuario
         update: Update de Telegram
         context: Contexto del bot
     """
-    user_message = update.message.text
     user_id = update.effective_user.id
 
-    logger.info(f"Mensaje recibido de usuario {user_id}: {user_message}")
+    logger.info(f"Mensaje del usuario {user_id}: {user_message}")
 
     # Obtener clientes del contexto
     ollama_client: OllamaClient = context.bot_data['ollama_client']
@@ -124,7 +165,7 @@ async def handle_expense_message(update: Update, context: ContextTypes.DEFAULT_T
         # 4. Guardar en Google Sheets
         sheets_client.append_expense(
             fecha=expense_data['fecha'],
-            descripcion=user_message,
+            descripcion=expense_data['descripcion'],
             categoria=expense_data['categoria'],
             monto=expense_data['monto']
         )
@@ -177,6 +218,6 @@ def format_confirmation_message(expense_data: dict, original_message: str) -> st
 💰 Monto: ${expense_data['monto']:.2f}
 📂 Categoría: {expense_data['categoria']}
 📅 Fecha: {expense_data['fecha']}
-📝 Descripción: {original_message}
+📝 Descripción: {expense_data['descripcion']}
 
-_Registro completado en Google Sheets_ ✨"""
+Registro completado en Google Sheets ✨"""

@@ -17,7 +17,7 @@ def validate_expense_data(data: dict, valid_categories: list) -> Tuple[bool, str
         Si es inválido: (False, "mensaje de error")
     """
     # Verificar campos requeridos
-    required_fields = ['monto', 'categoria', 'fecha']
+    required_fields = ['monto', 'categoria', 'fecha', 'descripcion']
     for field in required_fields:
         if field not in data:
             return False, f"Campo requerido '{field}' no encontrado"

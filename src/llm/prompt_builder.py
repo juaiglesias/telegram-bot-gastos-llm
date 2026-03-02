@@ -23,7 +23,9 @@ def build_prompt(user_message: str, categories: list) -> str:
 HOY ES {today}.
 
 Tu única función es recibir frases de gastos y responder EXCLUSIVAMENTE con un objeto JSON.
-Formato: {{"monto": <float>, "categoria": <string>, "fecha": <string formato Y-m-d>}}
+Formato: {{"monto": <float>, "categoria": <string>, "fecha": <string formato Y-m-d>, "descripcion": <string>}}
+
+La descripción implica un breve resumen del gasto, por ejemplo si se hace mención a compra de algo particular, eso que se compró, o si se hace mención a un lugar al que se fue, se menciona ese lugar. Es todo aquello que ayude a identificar el gasto más allá de la categoría
 
 Si no hay fecha explícita, asume hoy.
 Las categorías posibles son: "{categories_str}".
