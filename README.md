@@ -18,30 +18,23 @@ Bot de Telegram que procesa mensajes de texto y audio en lenguaje natural sobre 
 Vista de alto nivel de los componentes del sistema y cómo se comunican entre sí:
 
 ```mermaid
-C4Container
-    title Bot de Gastos — Diagrama de Contenedores
+flowchart LR
+    User(["👤 Usuario"])
+    Telegram(["📱 Telegram"])
+    Sheets(["📊 Google Sheets"])
 
-    Person(user, "Usuario", "Envía gastos por texto o nota de voz desde Telegram")
+    subgraph Sistema ["telegram-bot-gastos-llm"]
+        direction TB
+        Bot["🤖 Bot<br/>python-telegram-bot"]
+        Whisper["🎙️ Whisper<br/>transcripción local"]
+        Ollama["🧠 Ollama<br/>Qwen3:1.7b"]
+    end
 
-    System_Ext(telegram, "Telegram", "Plataforma de mensajería. Entrega mensajes al bot y devuelve respuestas al usuario.")
-
-    System_Boundary(system, "telegram-bot-gastos-llm") {
-        Container(bot, "Bot de Gastos", "Python · python-telegram-bot", "Orquesta el flujo completo: recibe mensajes, coordina la transcripción, el análisis LLM y el guardado.")
-        Container(whisper, "Whisper", "openai-whisper · modelo small (local)", "Transcribe notas de voz y audios a texto en español.")
-        Container(ollama, "Ollama · Qwen3:1.7b", "LLM local", "Extrae monto, categoría, fecha y descripción del mensaje en lenguaje natural y devuelve un JSON estructurado.")
-    }
-
-    System_Ext(sheets, "Google Sheets", "Almacena el registro de gastos en una hoja de cálculo.")
-
-    Rel(user, telegram, "Envía texto o nota de voz")
-    Rel(telegram, bot, "Entrega Update con el mensaje")
-    Rel(bot, whisper, "Envía audio para transcribir")
-    Rel(whisper, bot, "Devuelve texto transcrito")
-    Rel(bot, ollama, "Envía prompt con el mensaje", "HTTP REST")
-    Rel(ollama, bot, "Devuelve JSON con datos del gasto")
-    Rel(bot, sheets, "Registra el gasto", "Google Sheets API")
-    Rel(bot, telegram, "Envía confirmación al usuario")
-    Rel(telegram, user, "Muestra la confirmación")
+    User -->|"Envía texto nota de voz"| Telegram
+    Bot -->|"Polling"| Telegram
+    Bot -->|"Procesamiento de audio"| Whisper
+    Bot -->|"Transformación de texto a JSON con datos del gasto"| Ollama
+    Bot -->|"Registro de gasto"| Sheets
 ```
 
 ### Diagrama de Secuencia
