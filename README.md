@@ -1,6 +1,6 @@
 # Bot de Telegram para Registro de Gastos
 
-Bot de Telegram que procesa mensajes de texto y audio en lenguaje natural sobre gastos y los registra automáticamente en Google Sheets usando un LLM local (Ollama).
+Bot de Telegram que procesa mensajes de texto y audio en lenguaje natural sobre gastos y los registra automáticamente en Google Sheets usando un LLM (Ollama local o Gemini).
 
 ## 🎯 Objetivo
 
@@ -13,14 +13,14 @@ El foco es reducir fricción: registrar el gasto en el momento en que ocurre, us
 - 🤖 **Procesa lenguaje natural**: Envía mensajes como "Compré pan por $500 ayer" y el bot entiende
 - 🎙️ **Soporte de audio**: Envía notas de voz o audios; el bot los transcribe automáticamente con Whisper (modelo open-source)
 - 📊 **Registro automático**: Guarda directamente en Google Sheets con descripción generada por el LLM
-- 🧠 **LLM local**: Usa Qwen3:1.7B corriendo en Ollama (privado, sin costos de API)
+- 🧠 **LLM configurable**: Ollama local (privado, sin costos de API) o Gemini (API de Google)
 - ⚙️ **Configurable**: Todo parametrizable vía variables de entorno
 - 🍓 **Optimizado para Raspberry Pi**: Bajo consumo de recursos
 
 
 ## 🧠 ¿Por qué usar un LLM?
 
-El sistema utiliza un modelo liviano ejecutado localmente (via Ollama) para interpretar mensajes en lenguaje natural.
+El sistema utiliza un LLM para interpretar mensajes en lenguaje natural. Soporta dos conectores: Ollama (local) y Gemini (API de Google), seleccionables via variable de entorno.
 
 Ventajas frente a soluciones tradicionales (regex, comandos estructurados o botones):
 
@@ -31,14 +31,16 @@ Ventajas frente a soluciones tradicionales (regex, comandos estructurados o boto
 
 El LLM actúa únicamente como capa de interpretación. La lógica de negocio y la persistencia siguen siendo determinísticas.
 
-### 🔒 ¿Por qué un LLM local?
+### 🔒 Opciones de conector LLM
 
-Se optó por un modelo liviano ejecutado localmente en lugar de APIs externas por:
+El sistema soporta dos conectores, seleccionables mediante la variable `LLM_CONNECTOR`:
 
-- Evitar costos variables por uso
-- Independencia de servicios externos
+| Conector | Ventajas | Requisitos |
+|----------|----------|------------|
+| `ollama` | Privado, sin costos de API, sin dependencia externa | Ollama instalado con modelo descargado |
+| `gemini` | Sin infraestructura local, modelos más capaces | API key de Google Gemini |
 
-El modelo utilizado es intencionalmente liviano para mantener tiempos de respuesta razonables y bajo consumo de recursos ya que fue diseñado para ejecutarse en una Raspberry Pi 5.
+Para entornos como Raspberry Pi, Ollama con un modelo liviano (ej. `qwen3:1.7b`) mantiene tiempos de respuesta razonables con bajo consumo de recursos.
 
 ### 🏷️ Categorización automática
 
@@ -76,17 +78,22 @@ flowchart LR
     Telegram(["📱 Telegram"])
     Sheets(["📊 Google Sheets"])
 
+    Gemini(["✨ Gemini API"])
+
     subgraph Sistema ["telegram-bot-gastos-llm"]
         direction TB
         Bot["🤖 Bot<br/>python-telegram-bot"]
         Whisper["🎙️ Whisper<br/>transcripción local"]
-        Ollama["🧠 Ollama<br/>Qwen3:1.7b"]
+        LLM["🧠 LLMConnector<br/>ollama | gemini"]
+        OllamaLocal["🖥️ Ollama<br/>Qwen3:1.7b"]
     end
 
     User -->|"Envía texto nota de voz"| Telegram
     Bot -->|"Polling"| Telegram
     Bot -->|"Procesamiento de audio"| Whisper
-    Bot -->|"Transformación de texto a JSON con datos del gasto"| Ollama
+    Bot -->|"Transformación de texto a JSON con datos del gasto"| LLM
+    LLM -->|"ollama"| OllamaLocal
+    LLM -->|"gemini"| Gemini
     Bot -->|"Registro de gasto"| Sheets
 ```
 
@@ -102,15 +109,16 @@ sequenceDiagram
     participant Handler as telegram_handler.py
     participant Whisper as openai-whisper
     participant Prompt as prompt_builder.py
-    participant Ollama as ollama_client.py
-    participant OL as Ollama (Qwen3:1.7b)
+    participant LLMFactory as factory.py
+    participant LLMConn as LLMConnector<br/>(ollama/gemini)
     participant Val as validators.py
     participant Sheets as sheets_client.py
     participant GS as Google Sheets
 
     Note over Main: Arranque
     Main->>Main: Carga Config (.env)
-    Main->>Ollama: Inicializa OllamaClient
+    Main->>LLMFactory: create_llm_connector(config)
+    LLMFactory-->>Main: LLMConnector (OllamaClient | GeminiClient)
     Main->>Sheets: Inicializa SheetsClient
     Main->>Whisper: whisper.load_model("small")
     Main->>TG: Registra handlers · start polling
@@ -126,10 +134,8 @@ sequenceDiagram
 
     Handler->>Prompt: build_prompt(texto, categorías)
     Prompt-->>Handler: prompt con fecha actual
-    Handler->>Ollama: generate(prompt)
-    Ollama->>OL: HTTP POST /api/generate
-    OL-->>Ollama: JSON con monto, categoría, fecha, descripción
-    Ollama-->>Handler: expense_data
+    Handler->>LLMConn: generate(prompt)
+    LLMConn-->>Handler: expense_data (JSON con monto, categoría, fecha, descripción)
 
     Handler->>Val: validate_expense_data(expense_data, categorías)
 
@@ -148,7 +154,9 @@ sequenceDiagram
 ## 📋 Requisitos Previos
 
 1. **Python 3.9+**
-2. **Ollama** instalado con modelo `qwen3:1.7b`
+2. **LLM** (elegir uno):
+   - **Ollama** instalado con modelo `qwen3:1.7b` (si `LLM_CONNECTOR=ollama`)
+   - **Gemini API key** de Google (si `LLM_CONNECTOR=gemini`)
 3. **Google Cloud** cuenta con Sheets API habilitada
 4. **Bot de Telegram** creado via @BotFather
 5. **ffmpeg** instalado en el sistema (requerido por Whisper para procesar audio)
@@ -189,7 +197,9 @@ source .venv/bin/activate
 pip install -e .
 ```
 
-### 3. Configurar Ollama
+### 3. Configurar el conector LLM
+
+#### Opción A: Ollama (local)
 
 ```bash
 # Verificar que Ollama está corriendo
@@ -201,6 +211,10 @@ ollama pull qwen3:1.7b
 # Probar el modelo
 ollama run qwen3:1.7b "Hola"
 ```
+
+#### Opción B: Gemini (API)
+
+Obtener una API key en [Google AI Studio](https://aistudio.google.com/) y configurar `GEMINI_API_KEY` en el `.env`.
 
 ## ⚙️ Configuración
 
@@ -249,9 +263,16 @@ Completa las siguientes variables:
 # Token del bot de Telegram (de @BotFather)
 TELEGRAM_BOT_TOKEN=123456789:ABCdefGHIjklMNOpqrsTUVwxyz
 
-# Modelo de Ollama
+# Conector LLM: ollama | gemini
+LLM_CONNECTOR=ollama
+
+# --- Ollama (si LLM_CONNECTOR=ollama) ---
 OLLAMA_MODEL=qwen3:1.7b
 OLLAMA_TIMEOUT=45
+
+# --- Gemini (si LLM_CONNECTOR=gemini) ---
+GEMINI_API_KEY=tu-api-key-de-gemini
+GEMINI_MODEL=gemini-2.0-flash
 
 # Google Sheets (ajusta las rutas)
 GOOGLE_CREDENTIALS_PATH=/ruta/a/tu/service-account.json
@@ -356,14 +377,14 @@ sudo systemctl disable telegram-bot-gastos-llm
 
 ### El bot no responde
 
-1. Verifica que Ollama está corriendo:
-   ```bash
-   ollama list
-   ```
-
-2. Verifica logs del bot:
+1. Verifica logs del bot:
    ```bash
    sudo journalctl -u telegram-bot-gastos-llm -f
+   ```
+
+2. Si usas Ollama, verifica que está corriendo:
+   ```bash
+   ollama list
    ```
 
 3. Verifica que el token de Telegram es correcto
@@ -380,12 +401,22 @@ sudo systemctl disable telegram-bot-gastos-llm
 
 ### Ollama no responde o es muy lento
 
+> Solo aplica si `LLM_CONNECTOR=ollama`
+
 1. En Raspberry Pi, el modelo puede tardar 10-20 segundos
 2. Verifica que tienes suficiente RAM libre:
    ```bash
    free -h
    ```
 3. Considera ajustar `OLLAMA_TIMEOUT` en `.env`
+
+### Error con Gemini
+
+> Solo aplica si `LLM_CONNECTOR=gemini`
+
+1. Verifica que `GEMINI_API_KEY` está configurada en `.env`
+2. Verifica que la API key tiene permisos para el modelo configurado en `GEMINI_MODEL`
+3. Revisa los logs para ver el mensaje de error específico
 
 ### Categoría no reconocida
 
@@ -419,7 +450,10 @@ telegram-bot-gastos-llm/
 │   ├── bot/
 │   │   └── telegram_handler.py # Handlers de Telegram
 │   ├── llm/
-│   │   ├── ollama_client.py    # Cliente Ollama
+│   │   ├── base.py             # Interfaz base LLMConnector
+│   │   ├── factory.py          # Factory: crea el conector según LLM_CONNECTOR
+│   │   ├── ollama_client.py    # Implementación Ollama
+│   │   ├── gemini_client.py    # Implementación Gemini
 │   │   └── prompt_builder.py   # Constructor de prompts
 │   ├── storage/
 │   │   └── sheets_client.py    # Cliente Google Sheets
