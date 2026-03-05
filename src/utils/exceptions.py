@@ -11,6 +11,16 @@ class OllamaInvalidJSONError(Exception):
     pass
 
 
+class GeminiConnectionError(Exception):
+    """Error de conexión con Gemini."""
+    pass
+
+
+class GeminiInvalidJSONError(Exception):
+    """El JSON devuelto por Gemini es inválido o no se encontró."""
+    pass
+
+
 class InvalidCategoryError(Exception):
     """La categoría no está en la lista de categorías válidas."""
     pass

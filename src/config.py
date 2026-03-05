@@ -13,8 +13,17 @@ class Config:
 
         # Validar y cargar variables requeridas
         self.telegram_bot_token = self._get_required_env('TELEGRAM_BOT_TOKEN')
+
+        # Conector LLM
+        self.llm_connector = os.getenv('LLM_CONNECTOR', 'ollama').lower()
+
+        # Ollama
         self.ollama_model = os.getenv('OLLAMA_MODEL', 'qwen3:1.7b')
         self.ollama_timeout = int(os.getenv('OLLAMA_TIMEOUT', '45'))
+
+        # Gemini
+        self.gemini_api_key = os.getenv('GEMINI_API_KEY', '')
+        self.gemini_model = os.getenv('GEMINI_MODEL', 'gemini-2.0-flash')
         self.google_credentials_path = self._get_required_env('GOOGLE_CREDENTIALS_PATH')
         self.spreadsheet_id = self._get_required_env('SPREADSHEET_ID')
         self.sheet_name = os.getenv('SHEET_NAME', 'Gastos')

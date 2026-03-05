@@ -4,12 +4,14 @@ import os
 from telegram import Update
 from telegram.ext import ContextTypes
 from src.llm.prompt_builder import build_prompt
-from src.llm.ollama_client import OllamaClient
+from src.llm.base import LLMConnector
 from src.storage.sheets_client import SheetsClient
 from src.utils.validators import validate_expense_data
 from src.utils.exceptions import (
     OllamaConnectionError,
     OllamaInvalidJSONError,
+    GeminiConnectionError,
+    GeminiInvalidJSONError,
     InvalidExpenseDataError,
     GoogleSheetsError
 )
@@ -137,7 +139,7 @@ async def handle_text_message(user_message, update: Update, context: ContextType
     logger.info(f"Mensaje del usuario {user_id}: {user_message}")
 
     # Obtener clientes del contexto
-    ollama_client: OllamaClient = context.bot_data['ollama_client']
+    llm_connector: LLMConnector = context.bot_data['llm_connector']
     sheets_client: SheetsClient = context.bot_data['sheets_client']
     categories = context.bot_data['categories']
 
@@ -149,7 +151,7 @@ async def handle_text_message(user_message, update: Update, context: ContextType
         prompt = build_prompt(user_message, categories)
 
         # 2. Generar respuesta con Ollama
-        expense_data = ollama_client.generate(prompt)
+        expense_data = llm_connector.generate(prompt)
         logger.debug(f"Datos extraídos: {expense_data}")
 
         # 3. Validar datos
@@ -176,12 +178,12 @@ async def handle_text_message(user_message, update: Update, context: ContextType
 
         logger.info(f"Gasto registrado exitosamente para usuario {user_id}")
 
-    except OllamaConnectionError:
+    except (OllamaConnectionError, GeminiConnectionError):
         error_msg = "❌ Error de conexión con el LLM.\n🔧 El servicio no está disponible. Intenta más tarde."
         await update.message.reply_text(error_msg)
-        logger.error("Error de conexión con Ollama")
+        logger.error("Error de conexión con el conector LLM")
 
-    except OllamaInvalidJSONError:
+    except (OllamaInvalidJSONError, GeminiInvalidJSONError):
         error_msg = (
             "❌ No pude entender tu mensaje.\n\n"
             "💡 Intenta ser más específico:\n"
@@ -189,7 +191,7 @@ async def handle_text_message(user_message, update: Update, context: ContextType
             "• 'Gasté [monto] en [categoría]'"
         )
         await update.message.reply_text(error_msg)
-        logger.error("JSON inválido desde Ollama")
+        logger.error("JSON inválido desde el conector LLM")
 
     except GoogleSheetsError as e:
         error_msg = f"❌ Error al guardar en Google Sheets.\n🔧 {str(e)}"

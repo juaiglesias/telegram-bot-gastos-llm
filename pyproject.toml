@@ -10,6 +10,7 @@ dependencies = [
     "python-dotenv>=1.0.1",
     "python-dateutil>=2.9.0",
     "openai-whisper>=20250625",
+    "google-generativeai>=0.8.6",
 ]
 
 [project.optional-dependencies]

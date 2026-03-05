@@ -3,13 +3,14 @@ import json
 import re
 import logging
 import ollama
+from src.llm.base import LLMConnector
 from src.utils.exceptions import OllamaConnectionError, OllamaInvalidJSONError
 
 
 logger = logging.getLogger('telegram-bot-gastos-llm')
 
 
-class OllamaClient:
+class OllamaClient(LLMConnector):
     """Cliente para generar respuestas usando Ollama."""
 
     def __init__(self, model: str, timeout: int = 45):

@@ -8,7 +8,7 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from src.config import Config
 from src.utils.logger import setup_logger
-from src.llm.ollama_client import OllamaClient
+from src.llm.factory import create_llm_connector
 from src.storage.sheets_client import SheetsClient
 from src.bot.telegram_handler import start_command, help_command, handle_message
 
@@ -32,10 +32,8 @@ def main():
         logger.info("=" * 50)
 
         # Crear clientes
-        logger.info(f"Inicializando cliente Ollama (modelo: {config.ollama_model})...")
-        ollama_client = OllamaClient(
-            model=config.ollama_model, timeout=config.ollama_timeout
-        )
+        logger.info(f"Inicializando conector LLM ({config.llm_connector})...")
+        llm_client = create_llm_connector(config)
 
         logger.info(
             f"Inicializando cliente Google Sheets (spreadsheet: {config.spreadsheet_id})..."
@@ -56,7 +54,7 @@ def main():
         application = Application.builder().token(config.telegram_bot_token).build()
 
         # Almacenar clientes y configuración en bot_data para acceso en handlers
-        application.bot_data["ollama_client"] = ollama_client
+        application.bot_data["llm_connector"] = llm_client
         application.bot_data["sheets_client"] = sheets_client
         application.bot_data["whisper_model"] = model_transcribe
         application.bot_data["categories"] = config.expense_categories
@@ -79,12 +77,12 @@ def main():
         # IMPORTANTE: Usar polling, NO webhooks
         logger.info("Bot iniciado exitosamente. Escuchando mensajes...")
         logger.info(f"Categorías configuradas: {', '.join(config.expense_categories)}")
-        logger.info("Presiona Ctrl+C para detener el bot")
+        logger.info("Presiona Ctrl+C para detener el bot") 
 
         application.run_polling(
             poll_interval=30.0,
             timeout=30,
-            drop_pending_updates=True,
+            drop_pending_updates=False,
             allowed_updates=Update.ALL_TYPES,
             bootstrap_retries=-1,  # Reintentar infinitamente en errores de red
             read_timeout=60,
