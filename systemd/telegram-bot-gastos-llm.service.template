@@ -7,12 +7,13 @@ Type=simple
 User=pi
 WorkingDirectory=/home/pi/telegram-bot-gastos-llm
 Environment="PATH=/home/pi/telegram-bot-gastos-llm/.venv/bin"
+Environment="LOG_DIR=/var/log/telegram-bot-gastos-llm"
 ExecStart=/home/pi/telegram-bot-gastos-llm/.venv/bin/python run.py
 Restart=always
 RestartSec=10
 
-StandardOutput=append:/var/log/telegram-bot-gastos-llm/stdout.log
-StandardError=append:/var/log/telegram-bot-gastos-llm/stderr.log
+LogsDirectory=telegram-bot-gastos-llm
+LogsDirectoryMode=0755
 
 [Install]
 WantedBy=multi-user.target
