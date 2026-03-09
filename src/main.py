@@ -10,7 +10,7 @@ from src.config import Config
 from src.utils.logger import setup_logger
 from src.llm.factory import create_llm_connector
 from src.storage.sheets_client import SheetsClient
-from src.bot.telegram_handler import start_command, help_command, handle_message
+from src.bot.telegram_handler import start_command, help_command, handle_message, error_handler
 
 
 logger = None
@@ -65,6 +65,9 @@ def main():
         application.add_handler(
             MessageHandler((filters.TEXT | filters.VOICE | filters.AUDIO) & ~filters.COMMAND, handle_message)
         )
+        
+        # Manejador de errores global
+        application.add_error_handler(error_handler)
 
         # Configurar manejo de señales para shutdown graceful
         def signal_handler(sig, frame):

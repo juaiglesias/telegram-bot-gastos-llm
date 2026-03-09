@@ -223,3 +223,10 @@ def format_confirmation_message(expense_data: dict, original_message: str) -> st
 📝 Descripción: {expense_data['descripcion']}
 
 Registro completado en Google Sheets ✨"""
+
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Manejador global para excepciones no capturadas.
+    """
+    logger.error("Excepción no manejada capturada por el manejador global:", exc_info=context.error)
