@@ -88,6 +88,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     logger.info(f"Mensaje recibido del usuario {user_id}")
 
+    await update.message.reply_text("⏳ Procesando tu mensaje, puede tardar un momento...")
 
     # 1. ¿Es un audio o nota de voz?
     if message.voice or message.audio:
